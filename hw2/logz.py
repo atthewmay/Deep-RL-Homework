@@ -85,7 +85,8 @@ def pickle_tf_vars():
 
 def dump_tabular():
     """
-    Write all of the diagnostics from the current iteration
+    Write all of the 
+     from the current iteration
     """
     vals = []
     key_lens = [len(key) for key in G.log_headers]

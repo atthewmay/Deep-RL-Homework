@@ -327,9 +327,9 @@ class Agent(object):
         #
         # Define placeholders for targets, a loss function and an update op for fitting a 
         # neural network baseline. These will be used to fit the neural network baseline. 
+        # amazing that we use an entirely separate network to learn the baseline reward prediction!
         #========================================================================================#
         if self.nn_baseline:
-            raise NotImplementedError
             self.baseline_prediction = tf.squeeze(build_mlp(
                                     self.sy_ob_no, 
                                     1, 
@@ -337,9 +337,10 @@ class Agent(object):
                                     n_layers=self.n_layers,
                                     size=self.size))
             # YOUR_CODE_HERE
-            self.sy_target_n = None
-            baseline_loss = None
-            self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(baseline_loss)
+            self.sy_target_n = tf.placeholder(shape=[None], name="target_n", dtype=tf.int32) 
+
+            self.baseline_loss = tf.losses.mean_squared_error(self.sy_target_n, self.baseline_prediction) # because this is a continuous value, lets just use sum of squared error. or mean of sqare err
+            self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.baseline_loss)
 
     def sample_trajectories(self, itr, env):
         # Collect paths until we have enough timesteps
@@ -362,6 +363,7 @@ class Agent(object):
         steps = 0
         while True:
             if animate_this_episode:
+                # pdb.set_trace()
                 env.render()
                 time.sleep(0.01)
             obs.append(ob)
@@ -497,8 +499,15 @@ class Agent(object):
             # Hint #bl1: rescale the output from the nn_baseline to match the statistics
             # (mean and std) of the current batch of Q-values. (Goes with Hint
             # #bl2 in Agent.update_parameters.
-            raise NotImplementedError
-            b_n = None # YOUR CODE HERE
+            # to match the statistics, lets just scale them both to have std = 1 and mean = 0. This means we'll always sorta be normalizing advantages
+            # I think they maybe meant for me to just multiply the predictions by the std of the q_n and add the mean...
+            b_n = self.sess.run(self.baseline_prediction, feed_dict = {self.sy_ob_no:ob_no}) 
+            scale_mean = np.mean(q_n)
+            scale_std = np.std(q_n)
+            b_n = np.add(np.multiply(b_n,scale_std),scale_mean)
+
+            # pdb_checker = [np.mean(q_n),np.std(q_n),np.mean(b_n),np.std(b_n)]
+            # q_n = np.divide(np.subtract(q_n,np.mean(q_n)),np.std(q_n))
             adv_n = q_n - b_n
         else:
             adv_n = q_n.copy()
@@ -573,9 +582,14 @@ class Agent(object):
             # targets to have mean zero and std=1. (Goes with Hint #bl1 in 
             # Agent.compute_advantage.)
 
-            # YOUR_CODE_HERE
-            raise NotImplementedError
-            target_n = None 
+            # So this is where it actually does the fitting, and we'll fit it to the normalized q_n values.
+
+
+            target_n = np.divide(np.subtract(q_n,np.mean(q_n)),np.std(q_n))
+            self.batch_baseline_loss = self.sess.run(self.baseline_loss,feed_dict={self.sy_target_n : target_n, self.sy_ob_no : ob_no})
+            print('the baseline loss is '+ str(self.batch_baseline_loss))
+            self.sess.run(self.baseline_update_op,feed_dict={self.sy_target_n : target_n, self.sy_ob_no : ob_no})
+
 
         #====================================================================================#
         #                           ----------PROBLEM 3----------
@@ -698,7 +712,7 @@ def train_PG(
     #========================================================================================#
     # Training Loop
     #========================================================================================#
-    best_avg_return = 0
+    best_avg_return = -1e10
     total_timesteps = 0
     for itr in range(n_iter):
         print("********** Iteration %i ************"%itr)
@@ -735,6 +749,9 @@ def train_PG(
         logz.log_tabular("EpLenStd", np.std(ep_lengths))
         logz.log_tabular("TimestepsThisBatch", timesteps_this_batch)
         logz.log_tabular("TimestepsSoFar", total_timesteps)
+        # My own
+        if hasattr(agent,'batch_baseline_loss'):
+            logz.log_tabular("BaselineLoss", agent.batch_baseline_loss)
         logz.dump_tabular()
         logz.pickle_tf_vars()
 
@@ -767,7 +784,7 @@ def main():
     parser.add_argument('--save_models', action = 'store_true')
     parser.add_argument('--save_best_model', action = 'store_true')
     parser.add_argument('--run_model_only', type = str, default = None) # This is a string with the model savefile
-    parser.add_argument('--script_optimizing_dir', type = str, default = None)
+    parser.add_argument('--script_optimizing_dir', type = str, default = None) # use this if doing a bash_script method
 
 
     args = parser.parse_args()
@@ -816,11 +833,11 @@ def main():
     #     processes.append(p)
     #     # if you comment in the line below, then the loop will block 
     #     # until this process finishes
-    #     p.join()
+    #     # p.join()
 
     # for p in processes:
     #     p.join()
 
-    train_func()
+    train_func() # OH MY GOODNESS! The Render doesn't work if the above isn't commented out, and this line replacing it. Must use this line to render.
 if __name__ == "__main__":
     main()
