@@ -9,4 +9,4 @@ Homework 2: Policy Gradient & an attempt to teach my gravity-ball game to play i
 
 Here are a few of the fun highlights:
 
-![alt text](https://github.com/atthewmay/Deep-RL-Homework/tree/master/hw1/results_and_plots/dagger_humanoid.gif "Logo Title Text 1")
+![humanoid_dagger_gif](https://github.com/atthewmay/Deep-RL-Homework/tree/master/hw1/results_and_plots/dagger_humanoid.gif)
