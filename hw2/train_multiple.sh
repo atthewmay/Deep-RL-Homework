@@ -1,0 +1,3 @@
+python train_pg_f18.py GB_game -ep 10000 --discount 0.99 -n 200 -l 2 -s 32 -b 60000 -lr 5e-3 --output_activation tf.tanh --exp_name GB_sb_ndp --save_models --save_best_model --script_optimizing_dir GB_multi_train
+python train_pg_f18.py GB_game -ep 10000 --discount 0.99 -n 200 -l 2 -s 32 -b 60000 -lr 5e-3 --output_activation tf.tanh --exp_name GB_sb_ndp_rc_rp -rp --save_models --save_best_model --script_optimizing_dir GB_multi_train
+python train_pg_f18.py GB_game -ep 10000 --discount 0.99 -n 200 -l 2 -s 32 -b 60000 -lr 5e-3 --output_activation tf.tanh --exp_name GB_sb_ndp_rc_rp -rc -rp --save_models --save_best_model --script_optimizing_dir GB_multi_train
