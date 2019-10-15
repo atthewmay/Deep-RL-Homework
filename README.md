@@ -2,6 +2,8 @@
 
 This project contains my homework for Berkeley's Deep Reinforcement Learning course (CS 294, fall 2018 offering).  
 
+See the README.md in each homework folder for my completed homework.
+
 At this point, only homeworks 1 and 2 are (mostly) completed, and only the README.md for homework 2 is uploaded. Also to be included are some extra experiments/projects I am working on using code from homework 2.
 
 Homework 1: Imitation Learning (behavioral cloning and DAgger)  
