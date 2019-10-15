@@ -102,7 +102,7 @@ I cut the training off around 70ish to save compute time with my computer.
 The output appears like. 
 ![](../result_plots/lunar_lander_3e.png)  
 
-And the running model looks like 
+And the running model looks like  
 ![](result_plots/ll_gif.gif) 
 
 ## Half-cheetah Task
@@ -113,7 +113,7 @@ First we ran a parameter search over several learning rates and batch sizes to d
 we performed the parameter search using the bash script: half_cheetah_optimizer.sh  
 
 Results as follows:  
-![](../result_plots/cheetah_big_triage.png)
+![](result_plots/cheetah_big_triage.png)
 
 we see that generally smaller learning rates are more stable, and the larger batch sizes do better. But there wasn't such a clear winner as I'd have expected. I went with batch size = 50000, lr = 1e-2.
 
@@ -128,6 +128,14 @@ Gave the following results
 ![](result_plots/cheetah_big_runs.png)
 
 As expected, the network using reward to go and nn-baselines performed the best!
+
+### Demo  
+This time I ran the half-cheetah for 500 training episodes, with a batch size of 50000 and saved the best model.  
+Reward over training episodes looked like:  
+![](result_plots/hc_longer_train.png)
+
+The best model clearly still found a funny local minima.  
+![](result_plots/hc_local_min.gif)
 
 
 
