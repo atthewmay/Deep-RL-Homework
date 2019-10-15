@@ -40,3 +40,10 @@ Each time the cart-pole simulation with little training twitches it represents a
 
 #### Half-Cheetah Finds Local Minima...
 ![](hw2/result_plots/hc_local_min.gif)
+
+## My Project: Training Gravity-Ball
+This is a game I made using the python IDE app "Pythonista." Enemies spawn in the corners and their acceleration is determined by 1/r^2, where r is the distance between you and the enemy. Your velocity is controlled by the tilt of the phone.
+
+| Game demo | Beginning to learn |  
+| ------------------------- | ------------------------- |  
+| ![](hw2/result_plots/gb_game_demo.gif) | ![](hw2/result_plots/2_ball_rc_rp.gif) |
