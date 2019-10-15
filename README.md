@@ -13,15 +13,28 @@ Homework 1: Imitation Learning
 
 | Better dancer: Behavioral Cloning | Better runner: DAgger |  
 | ------------------------- | ------------------------- |  
-| ![](hw1/results_and_plots/non_dagger_humanoid.gif) | ![humanoid_dagger_gif](hw1/results_and_plots/dagger_humanoid.gif) |
+| ![](hw1/results_and_plots/non_dagger_humanoid.gif) | ![](hw1/results_and_plots/dagger_humanoid.gif) |
 
 
-Homework 2: Policy Gradient
+### Homework 2: Policy Gradient
 
-Discrete-action-environment cart pole task
+#### Discrete-action-environment cart pole task
+
 | After 1500 training examples | After 25,000 training examples |  
 | ------------------------- | ------------------------- |  
-| ![yo](hw2/results_and_plots/cart_pole_v0_n3_b500.gif) | ![yo](hw2/results_and_plots/cart_pole_v0_n50_b500.gif) |
+| ![](hw2/result_plots/cart_pole_v0_n3_b500.gif) | ![](hw2/result_plots/cart_pole_v0_n50_b500.gif) |
+
+Each time the cart-pole simulation with little training twitches it represents a crash.
 
 
 
+
+#### Continuous-action-space inverted pendulum
+![](hw2/result_plots/continuous_gif.gif) 
+
+
+#### Lunar-Lander environment
+![](hw2/result_plots/ll_gif.gif)
+
+#### Half-Cheetah Finds Local Minima...
+![](hw2/result_plots/hc_local_min.gif)
