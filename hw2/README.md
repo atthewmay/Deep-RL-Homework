@@ -9,20 +9,24 @@ In policy gradient, we use a neural network to represent the policy of an actor.
 
 
 ## Cart Pole Experiments
-Using the cart-pole environment from OpenAI gym, we test different batch sizes and several different configurations of the variance-reducing strategies. For each experiment, we used 100 iterations of 2 different batch sizes, and we ran each of these 3 times (-e is 3) so as to plot the mean and standard deviation of the rewards.
+Using the cart-pole environment from OpenAI gym, we test different batch sizes and several different configurations of the variance-reducing strategies. The action space is discrete, meaning the policy network outputs a 1 or 0 at each timestep to choose to move left or right. 
 
-These experiments were run using the following commands:  
+For each experiment, we used 100 iterations of 2 different batch sizes, and we ran each of these 3 times (-e is 3) so as to plot the mean and standard deviation of the rewards.
+
+
+| batch_size = 1000 | batch_size = 5000 |  
+| ------------------------- | ------------------------- |  
+| ![](result_plots/Figure_1.png) | ![](result_plots/large_batch.png) | 
+For the legend: "-rtg" = used reward-to-go, "-dna" = don't normalize advantage 
+
+The above experiments were run using the following commands:  
 python train_pg_f18.py CartPole-v0 -n 100 -b 1000 -e 3 -dna --exp_name sb_no_rtg_dna  
 python train_pg_f18.py CartPole-v0 -n 100 -b 1000 -e 3 -rtg -dna --exp_name sb_rtg_dna  
 python train_pg_f18.py CartPole-v0 -n 100 -b 1000 -e 3 -rtg --exp_name sb_rtg_na  
 python train_pg_f18.py CartPole-v0 -n 100 -b 5000 -e 3 -dna --exp_name lb_no_rtg_dna  
 python train_pg_f18.py CartPole-v0 -n 100 -b 5000 -e 3 -rtg -dna --exp_name lb_rtg_dna  
 python train_pg_f18.py CartPole-v0 -n 100 -b 5000 -e 3 -rtg --exp_name lb_rtg_na  
- 
-| batch_size = 1000 | batch_size = 5000 |  
-| ------------------------- | ------------------------- |  
-| ![](result_plots/Figure_1.png) | ![](result_plots/large_batch.png) | 
-For the legend: "-rtg" = used reward-to-go, "-dna" = don't normalize advantage 
+
 
 #### Analysis
 The network using reward-to-go seems more solidly convergent on the target of 200 reward. 
@@ -31,8 +35,9 @@ Not normalizing the advantage actually helps it to converge faster, which makes 
 The larger batches do not converge much faster, if at all. Using tf.reduce_mean() for the loss function means that the gradients should be approximately the same magnitude. However, with larger batches, you expect the estimated gradient to be a better estimate of the true gradient. I Suspect this helps it to converge a little bit faster, and it helps the methods with higher variance converge better to the optimum. Because it should decrease the variance for every method, every method performs better at convergence.
 
 
-For fun: Demonstration of the cartpole task as learning progresses with little training (n = 3 and 50) and smaller batches (size = 500)
-run using: python train_pg_f18.py CartPole-v0 -n #\_iterations -b 500 -e 1 -dna -rtg --exp_name test --save_models --render
+#### For fun: 
+Demonstration of the cartpole task as learning progresses with little training (n = 3 and 50) and smaller batches (size = 500)
+ran using: python train_pg_f18.py CartPole-v0 -n #\_iterations -b 500 -e 1 -dna -rtg --exp_name test --save_models --render
 So both used reward-to-go and did not normalize advantage
 
 | After 3 SGD iterations | After 50 SGD iterations |  
@@ -41,3 +46,32 @@ So both used reward-to-go and did not normalize advantage
 Each time the cart-pole simulation with little training twitches it represents a crash.
 
 
+## Continuous–Action-Space Inverted Pendulum
+In this experiment we train policy gradient on MuJoCo's inverted pendulum environment. This is essentially the same problem as above, except that now the action space is continuous, which means the model outputs the mean of a Gaussian distribution and the direction of movement is then sampled from that Gaussian. The std of the distribution is a separate learned parameter not output at each timestep.
+
+### Optimizing Batch Size
+First we search for a good batch size with which to perform further training. We'd like to use the smallest batch size we can to save compute. Running the bash script b_size_optimizer.sh with the given learning rate 5e-3, we see  
+![](result_plots/Another-plot-of-batch-sizes-with-lr-of-5e-3Figure_1.png)  
+The 5e-4 learning rate is likely an error, but we didn't choose that batch size anyway.
+
+#### Analysis
+We see that several batch sizes seem viable, but that all batch sizes seem to experience "unlearning." I'm currently suspecting this is due to "catastrophic forgetting" mentioned on reddit and by the papers "Policy Consolidation for Continual Reinforcement Learning" by Kaplanis and "Catastrophic Interference in Connectionist Networks: The Sequential Learning Problem" by McCloskey. 
+
+My current intuition on how this works is that as your model trains, it stores information regarding valuable action given state, (action|state), in the weights of neural net, and as training progresses and the actor improves, the actor will see different, more favorable distributions of input states. This causes your policy to emphasize different (action|state) and store information relevant to the newer distributions. This is effectively sequential training on somewhat different subtasks. Should something cause it to stumble out of this favorable distribution into an unfavorable one (say a high-variance gradient miss-estimate takes a step in the wrong direction), it will not contain the information to handle the less favorable inputs, and thus reward quickly plummets. That would line up with how quickly it forgets. It then may have to start from scratch and work its way back up again.
+
+### Faster Learning Rate
+We should expect a lower learning rate to help with the forgetting, as the gradient step sizes would be smaller, but let's try a bigger one, as it may just get us back in business faster after it forgets.    
+
+![](result_plots/faster_lr.png)
+
+The batch size of 3k worked quickly and is reasonably small, so we will use that.
+
+### Demo 
+Ran python train_pg_f18.py InvertedPendulum-v2 -ep 1000 --discount 0.9 -n 100 -e 1 -b 3000 -lr 5e-2 -rtg --exp_name test --script_optimizing_dir showing_invert_pend --save_models --save_best_model  
+This saves the best model (to circumvent the forgetting).  
+
+After just 26 iterations of training, it hit the maximum reward and looked like:
+
+![](result_plots/continuous_gif.gif)
+
+run using: python train_pg_f18.py InvertedPendulum-v2 -ep 1000 --discount 0.9 -n 100 -e 1 -b 3000 -lr 5e-2 -rtg --exp_name test --run_model_only my_save_loc/showing_invert_pend/test_InvertedPendulum-v2_16-09-2019_18-36-27.ckpt --render
