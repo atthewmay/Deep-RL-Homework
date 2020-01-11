@@ -13,7 +13,9 @@ import inspect
 from multiprocessing import Process
 import math as m
 import ipdb as pdb
-
+import sys
+sys.path.append("../../../gravity_ball_game/")
+from gravity_ball_game_training_simulator import GB_game
 #============================================================================================#
 # Utilities
 #============================================================================================#
@@ -78,7 +80,9 @@ class Agent(object):
         self.discrete = computation_graph_args['discrete']
         self.size = computation_graph_args['size']
         self.n_layers = computation_graph_args['n_layers']
+        self.output_activation = computation_graph_args['output_activation']
         self.learning_rate = computation_graph_args['learning_rate']
+        self.baseline_lr = computation_graph_args['baseline_lr']
 
         self.animate = sample_trajectory_args['animate']
         self.max_path_length = sample_trajectory_args['max_path_length']
@@ -151,12 +155,12 @@ class Agent(object):
         # raise NotImplementedError
         if self.discrete:
             # YOUR_CODE_HERE
-            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, 'mlp', self.n_layers, self.size, activation=tf.tanh, output_activation=None)
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, 'mlp', self.n_layers, self.size, activation=tf.tanh, output_activation=exec(self.output_activation))
             # Right, we want output activation = none, bc these are "logits", which in tf-language means the unscaled inputs to the softmax function
             return sy_logits_na
         else:
             # YOUR_CODE_HERE
-            sy_mean = build_mlp(sy_ob_no, self.ac_dim, 'mlp', self.n_layers, self.size, activation=tf.tanh, output_activation=None)
+            sy_mean = build_mlp(sy_ob_no, self.ac_dim, 'mlp', self.n_layers, self.size, activation=tf.tanh, output_activation=exec(self.output_activation))
             # Note this will be a vector of means of length self.ac_dim
             sy_logstd = tf.get_variable(name = 'std_vec', shape = self.ac_dim)
             # weird! We'll separately train the std, not letting it depend on the network. Seems maybe there should be a separate network for this guy.
@@ -315,7 +319,8 @@ class Agent(object):
         #                           ----------PROBLEM 2----------
         # Loss Function and Training Operation
         #========================================================================================#
-        self.unscaled_loss = -tf.reduce_mean(self.sy_logprob_n) # YOUR CODE HERE
+        self.unscaled_loss = -tf.reduce_mean(self.sy_logprob_n) # This loss is just the log(a|s), not scaled by the r(path). 
+        # This is a (+) number. 
 
         self.s_scaledlogprob_n = tf.multiply(self.sy_logprob_n,self.sy_adv_n) # this assumes the sy_adv_n is taking the total reward or reward to go at each timestep.
         self.loss = -tf.reduce_mean(self.s_scaledlogprob_n) # YOUR CODE HERE
@@ -340,7 +345,10 @@ class Agent(object):
             self.sy_target_n = tf.placeholder(shape=[None], name="target_n", dtype=tf.int32) 
 
             self.baseline_loss = tf.losses.mean_squared_error(self.sy_target_n, self.baseline_prediction) # because this is a continuous value, lets just use sum of squared error. or mean of sqare err
-            self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.baseline_loss)
+            if self.baseline_lr is not None:
+                self.baseline_update_op = tf.train.AdamOptimizer(self.baseline_lr).minimize(self.baseline_loss)
+            else:
+                self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.baseline_loss)
 
     def sample_trajectories(self, itr, env):
         # Collect paths until we have enough timesteps
@@ -366,6 +374,7 @@ class Agent(object):
                 # pdb.set_trace()
                 env.render()
                 time.sleep(0.01)
+            # pdb.set_trace()
             obs.append(ob)
             #====================================================================================#
             #                           ----------PROBLEM 3----------
@@ -506,7 +515,9 @@ class Agent(object):
             scale_std = np.std(q_n)
             b_n = np.add(np.multiply(b_n,scale_std),scale_mean)
 
-            # pdb_checker = [np.mean(q_n),np.std(q_n),np.mean(b_n),np.std(b_n)]
+
+            # pdb_checker = [np.mean(q_n),np.std(q_n),np.mean(b_n),np.std(b_n)] # Note that this works quite well. Not perfectly. The mean is pretty dead on. 
+            # print(pdb_checker)
             # q_n = np.divide(np.subtract(q_n,np.mean(q_n)),np.std(q_n))
             adv_n = q_n - b_n
         else:
@@ -604,9 +615,10 @@ class Agent(object):
 
         # YOUR_CODE_HERE
         # pdb.set_trace()
-        self.loss_value = self.sess.run(self.loss, feed_dict = {self.sy_ob_no : ob_no, self.sy_ac_na : ac_na, self.sy_adv_n : adv_n})
-        print('the loss is '+str(self.loss_value))
-        print('the unscaled loss is '+str(self.sess.run(self.unscaled_loss, feed_dict = {self.sy_ob_no : ob_no, self.sy_ac_na : ac_na, self.sy_adv_n : adv_n})))
+        self.batch_loss = self.sess.run(self.loss, feed_dict = {self.sy_ob_no : ob_no, self.sy_ac_na : ac_na, self.sy_adv_n : adv_n})
+        print('the loss is '+str(self.batch_loss))
+        self.batch_unscaled_loss = self.sess.run(self.unscaled_loss, feed_dict = {self.sy_ob_no : ob_no, self.sy_ac_na : ac_na, self.sy_adv_n : adv_n})
+        print('the unscaled loss is '+str(self.batch_unscaled_loss))
         _ = self.sess.run(self.update_op,feed_dict = {self.sy_ob_no : ob_no, self.sy_ac_na : ac_na, self.sy_adv_n : adv_n})
 
         # raise NotImplementedError
@@ -627,7 +639,8 @@ def train_PG(
         gamma, 
         min_timesteps_per_batch, 
         max_path_length,
-        learning_rate, 
+        learning_rate,
+        baseline_lr, 
         reward_to_go, 
         animate, 
         logdir, 
@@ -635,11 +648,19 @@ def train_PG(
         nn_baseline, 
         seed,
         n_layers,
+        output_activation,
         size,
         save_models,
         save_best_model,
+        resume_string,
         run_model_only,
-        script_optimizing_dir):
+        script_optimizing_dir,
+        relative_positions,
+        death_penalty,
+        reward_circle,
+        num_enemies,
+        gb_discrete,
+        gb_max_speed):
 
     start = time.time()
     if script_optimizing_dir is not None:
@@ -655,18 +676,24 @@ def train_PG(
     #========================================================================================#
 
     # Make the gym environment
-    env = gym.make(env_name)
+    if env_name == 'GB_game':
+        env = GB_game(num_char = num_enemies, reward_circle = reward_circle, death_penalty = death_penalty, relative_positions = relative_positions, discrete=gb_discrete, max_speed=gb_max_speed)
+        discrete = env.discrete
+    else:
+        env = gym.make(env_name)
+        # Is this env continuous, or self.discrete?
+        discrete = isinstance(env.action_space, gym.spaces.Discrete)
 
     # Set random seeds
     tf.set_random_seed(seed)
     np.random.seed(seed)
+    # pdb.set_trace()
     env.seed(seed)
 
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
 
-    # Is this env continuous, or self.discrete?
-    discrete = isinstance(env.action_space, gym.spaces.Discrete)
+    
 
     # Observation and action sizes
     ob_dim = env.observation_space.shape[0]
@@ -677,11 +704,13 @@ def train_PG(
     #========================================================================================#
     computation_graph_args = {
         'n_layers': n_layers,
+        'output_activation': output_activation,
         'ob_dim': ob_dim,
         'ac_dim': ac_dim,
         'discrete': discrete,
         'size': size,
         'learning_rate': learning_rate,
+        'baseline_lr' : baseline_lr,
         }
 
     sample_trajectory_args = {
@@ -705,14 +734,19 @@ def train_PG(
     # tensorflow: config, session, variable initialization
     agent.init_tf_sess()
 
-    # Now we'll try to load...
+    # Now we'll try to load if we are only running a model or if we are resuming training.
     if run_model_only is not None:
         agent.load_models_action(run_model_only)
         agent.running_only = True
+    elif resume_string is not None:
+        agent.load_models_action(resume_string)
+
+
+    
     #========================================================================================#
     # Training Loop
     #========================================================================================#
-    best_avg_return = -1e10
+    best_avg_return = -(5e10)
     total_timesteps = 0
     for itr in range(n_iter):
         print("********** Iteration %i ************"%itr)
@@ -752,6 +786,10 @@ def train_PG(
         # My own
         if hasattr(agent,'batch_baseline_loss'):
             logz.log_tabular("BaselineLoss", agent.batch_baseline_loss)
+        logz.log_tabular("UnscaledLoss", agent.batch_unscaled_loss)
+        logz.log_tabular("Loss", agent.batch_loss)
+
+
         logz.dump_tabular()
         logz.pickle_tf_vars()
 
@@ -773,18 +811,30 @@ def main():
     parser.add_argument('--batch_size', '-b', type=int, default=1000)
     parser.add_argument('--ep_len', '-ep', type=float, default=-1.)
     parser.add_argument('--learning_rate', '-lr', type=float, default=5e-3)
+    parser.add_argument('--baseline_lr', '-bllr', type=float, default=None)
     parser.add_argument('--reward_to_go', '-rtg', action='store_true')
     parser.add_argument('--dont_normalize_advantages', '-dna', action='store_true')
     parser.add_argument('--nn_baseline', '-bl', action='store_true')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
     parser.add_argument('--n_layers', '-l', type=int, default=2)
+    parser.add_argument('--output_activation', type=str, default = None)
     parser.add_argument('--size', '-s', type=int, default=64)
     #I'm adding this one for my own edification
     parser.add_argument('--save_models', action = 'store_true')
     parser.add_argument('--save_best_model', action = 'store_true')
+    parser.add_argument('--resume_string', type = str, default = None) # put the model name that you will resume training from!
     parser.add_argument('--run_model_only', type = str, default = None) # This is a string with the model savefile
     parser.add_argument('--script_optimizing_dir', type = str, default = None) # use this if doing a bash_script method
+
+    # These 3 are for my game only!
+    parser.add_argument('--relative_positions', '-rp', action='store_true')
+    parser.add_argument('--death_penalty', '-dp', action='store_true')
+    parser.add_argument('--reward_circle', '-rc', action='store_true')
+    parser.add_argument('--num_enemies', type=int, default = 1)
+    parser.add_argument('--gb_discrete', action='store_true')
+    parser.add_argument('--gb_max_speed', type=int, default=20)
+
 
 
     args = parser.parse_args()
@@ -813,6 +863,7 @@ def main():
                 min_timesteps_per_batch=args.batch_size,
                 max_path_length=max_path_length,
                 learning_rate=args.learning_rate,
+                baseline_lr=args.baseline_lr,
                 reward_to_go=args.reward_to_go,
                 animate=args.render,
                 logdir=os.path.join(logdir,'%d'%seed),
@@ -820,24 +871,38 @@ def main():
                 nn_baseline=args.nn_baseline, 
                 seed=seed,
                 n_layers=args.n_layers,
+                output_activation = args.output_activation,
                 size=args.size,
                 save_models = args.save_models,
                 save_best_model = args.save_best_model,
+                resume_string = args.resume_string,
                 run_model_only = args.run_model_only,
-                script_optimizing_dir=args.script_optimizing_dir
+                script_optimizing_dir=args.script_optimizing_dir,
+                relative_positions = args.relative_positions, # These 3 are only for the game!
+                death_penalty=args.death_penalty,
+                reward_circle=args.reward_circle,
+                num_enemies=args.num_enemies,
+                gb_discrete=args.gb_discrete,
+                gb_max_speed=args.gb_max_speed
                 )
         # # Awkward hacky process runs, because Tensorflow does not like
         # # repeatedly calling train_PG in the same thread.
-    #     p = Process(target=train_func, args=tuple())
-    #     p.start()
-    #     processes.append(p)
-    #     # if you comment in the line below, then the loop will block 
-    #     # until this process finishes
-    #     # p.join()
+    #     if args.render == False:
+    #         p = Process(target=train_func, args=tuple())
+    #         p.start()
+    #         processes.append(p)
+    #         # if you comment in the line below, then the loop will block 
+    #         # until this process finishes
+    #         # p.join()
 
-    # for p in processes:
-    #     p.join()
+    # if args.render == False:
+    #     for p in processes:
+    #         p.join()
 
+    # else:
     train_func() # OH MY GOODNESS! The Render doesn't work if the above isn't commented out, and this line replacing it. Must use this line to render.
 if __name__ == "__main__":
     main()
+
+
+# you add new args to the code by putting a new arg in 3 different places.
