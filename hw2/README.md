@@ -138,9 +138,23 @@ The best model clearly still found a funny local minima.
 ![](result_plots/hc_local_min.gif)
 
 
+# Gravity Ball Game
 
+This will eventually get its own page, but for now it's here because it's using policy gradient like HW2.
 
+This environment is modeled after a game I made using Pythonista, a Python IDE for ios. The objective is to avoid enemies, which are attracted to you, experiencing acceleration ~ 1/r^2 (modeled after electrostatic/gravitational attraction). We start with a discrete action space of dimension 5 (up,down,L,R,still).
 
+I start with a neural network architecture that has a fixed state space, by using for enemies and not adding any more. Eventually the plan is to use an architecture that can and take variable state space, such as a convolutional architecture or recurrent architecture.
+
+I also decided to reward the agent proportional to his proximity to the centerpoint of the environment. This means that while he is in the very center of the environment he receives a reward of one part-time step, a reward of zero while at the perimeter of a circle that is tangent to the environment edges, and a negative reward while in the corners. I suspect this will help if I use transfer learning later, as the enemies will spawn in the corners.
+
+Below is the graph of the training which took place over a number of days on Google cloud. Note that the reward starts relatively high because this was resumed from a prior training, which is not shown in the graph.
+
+![](result_plots/gb_discrete_gcloud_training.png)
+
+The performance looks like this. Pretty dang good.
+
+![](result_plots/gb_discrete_4ball.gif)
 
 
 
