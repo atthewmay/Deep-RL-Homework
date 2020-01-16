@@ -179,7 +179,7 @@ def train_PG(
     if parallel is True:
         num_cpus = psutil.cpu_count(logical=True)
         num_cpus = num_cpus-1
-        print('the number of cpus is ' + str(num_cpus))
+        print('the number of cpus is now' + str(num_cpus))
         ray.init(num_cpus=num_cpus,ignore_reinit_error=True)
         pathlen_counter = Counter.remote()
         parallel_actors = [Parallel_Actor.remote(computation_graph_args, sample_trajectory_args, estimate_return_args) for _
@@ -263,7 +263,10 @@ def train_PG(
             best_avg_return = mean_return
             if save_best_model==True:
                 save_string = logdir[5:-2]
-                agent.save_models_action(save_string)
+                if parallel:
+                    agent.save_models_action.remote(save_string)
+                else:
+                    agent.save_models_action(save_string)
         logz.log_tabular("AverageReturn", mean_return)
         logz.log_tabular("StdReturn", np.std(returns))
         logz.log_tabular("MaxReturn", np.max(returns))

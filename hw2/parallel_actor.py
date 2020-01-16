@@ -8,7 +8,6 @@ os.environ["PYTHONPATH"] = parent_dir + ":" + os.environ.get("PYTHONPATH", "")
 sys.path.append("../../../gravity_ball_game/")
 
 from gravity_ball_game_training_simulator import GB_game
-from dummy_obj_file import dummy_obj
 import numpy as np
 from random import randint
 import time
@@ -96,6 +95,7 @@ class Parallel_Actor(Agent):
 
             if current_count > self.min_timesteps_per_batch:
                 break
+
         return paths, timesteps_this_batch
 
     def sample_trajectories_fake(self, itr,env, counter_actor):
