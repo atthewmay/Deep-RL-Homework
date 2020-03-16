@@ -60,7 +60,7 @@ def atari_learn(env,
         ], outside_value=0.01
     )
 
-    dqn.learn(
+    dqn.learn(  # Okay this is def at bottom of dqn and calls QLearner with the following args
         env=env,
         q_func=atari_model,
         optimizer_spec=optimizer,

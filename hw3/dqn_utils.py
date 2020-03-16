@@ -7,6 +7,8 @@ import random
 
 def huber_loss(x, delta=1.0):
     # https://en.wikipedia.org/wiki/Huber_loss
+    """Really cool. This returns x**2 * 0.5 if abs(x) < delta and returns delta*(abs(x)-0.5*delta)
+    otherwise"""
     return tf.where(
         tf.abs(x) < delta,
         tf.square(x) * 0.5,
@@ -221,6 +223,7 @@ class ReplayBuffer(object):
         rew_batch      = self.reward[idxes]
         next_obs_batch = np.concatenate([self._encode_observation(idx + 1)[None] for idx in idxes], 0)
         done_mask      = np.array([1.0 if self.done[idx] else 0.0 for idx in idxes], dtype=np.float32)
+        # done is 1 if that current frame ended it. 
 
         return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask
 
@@ -255,6 +258,8 @@ class ReplayBuffer(object):
             Array of shape
             (batch_size, img_h, img_w, img_c * frame_history_len)
             and dtype np.uint8
+            Question: why is the next observation not just a single frame?
+            Answer: Bc then you couldn't run it thru your Q-network to evaluate max()
         done_mask: np.array
             Array of shape (batch_size,) and dtype np.float32
         """
@@ -276,6 +281,11 @@ class ReplayBuffer(object):
         return self._encode_observation((self.next_idx - 1) % self.size)
 
     def _encode_observation(self, idx):
+        """I'm still not sure what happens if start_index is less than 0 with a full buffer. I feel that
+        there isn't a good condition for this. All the ranges would fail!
+
+        Oh wow. of course it works. You'll have negative start_idx, but that will draw it from the end of the
+        array. Python is brilliant. """
         end_idx   = idx + 1 # make noninclusive
         start_idx = end_idx - self.frame_history_len
         # this checks if we are using low-dimensional observations, such as RAM
@@ -286,13 +296,19 @@ class ReplayBuffer(object):
         if start_idx < 0 and self.num_in_buffer != self.size:
             start_idx = 0
         for idx in range(start_idx, end_idx - 1):
+            """checks to see if there is a done == true in your frame history. if so, you just start after
+            that one. Then if there was a done, you start after it and pad w/ 0s the equivalent number of
+            frames you lost. 
+            Also, it's so cool. The [idx % self.size] allows the buffer to seemlessly loop back to the
+            beginning when it's full. For adding and for sampling. It's a loop overwriter."""
             if self.done[idx % self.size]:
                 start_idx = idx + 1
-        missing_context = self.frame_history_len - (end_idx - start_idx)
+        missing_context = self.frame_history_len - (end_idx - start_idx) #if there was a done in frame hx
         # if zero padding is needed for missing context
         # or we are on the boundry of the buffer
         if start_idx < 0 or missing_context > 0:
             frames = [np.zeros_like(self.obs[0]) for _ in range(missing_context)]
+            # only add 0's w/ missing_context, not w/ negative start.
             for idx in range(start_idx, end_idx):
                 frames.append(self.obs[idx % self.size])
             return np.concatenate(frames, 2)
@@ -300,6 +316,7 @@ class ReplayBuffer(object):
             # this optimization has potential to saves about 30% compute time \o/
             img_h, img_w = self.obs.shape[1], self.obs.shape[2]
             return self.obs[start_idx:end_idx].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
+        # no idea about the structure of the data here.
 
     def store_frame(self, frame):
         """Store a single frame in the buffer at the next available index, overwriting
@@ -323,8 +340,8 @@ class ReplayBuffer(object):
             self.done     = np.empty([self.size],                     dtype=np.bool)
         self.obs[self.next_idx] = frame
 
-        ret = self.next_idx
-        self.next_idx = (self.next_idx + 1) % self.size
+        ret = self.next_idx #nice that we return the current idx to use self.store_effect()
+        self.next_idx = (self.next_idx + 1) % self.size #this is oh so clever. goes back to 0 at end.
         self.num_in_buffer = min(self.size, self.num_in_buffer + 1)
 
         return ret
@@ -334,6 +351,9 @@ class ReplayBuffer(object):
         at index idx. The reason `store_frame` and `store_effect` is broken
         up into two functions is so that once can call `encode_recent_observation`
         in between.
+
+        Right, you'll need to call that bc you have to store not just the single frame, but the frames before
+        it.
 
         Paramters
         ---------
