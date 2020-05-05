@@ -31,9 +31,6 @@ def lander_stopping_criterion(num_timesteps):
     def stopping_criterion(env, t):
         # notice that here t is the number of steps of the wrapped env,
         # which is different from the number of steps in the underlying env
-        if get_wrapper_by_name(env, "Monitor").get_total_steps() > 9000:
-            import pdb; pdb.set_trace()
-        print(get_wrapper_by_name(env, "Monitor").get_total_steps()) 
         return get_wrapper_by_name(env, "Monitor").get_total_steps() >= num_timesteps
     return stopping_criterion
 
@@ -113,7 +110,7 @@ def main():
     env = get_env(seed)
     session = get_session()
     set_global_seeds(seed)
-    lander_learn(env, session, num_timesteps=10000, seed=seed)
+    lander_learn(env, session, num_timesteps=1e6, seed=seed)
 
 if __name__ == "__main__":
     main()

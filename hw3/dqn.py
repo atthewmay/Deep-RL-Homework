@@ -11,6 +11,14 @@ import tensorflow.contrib.layers as layers
 from collections import namedtuple
 from dqn_utils import *
 
+"""Summary Of the things I messed up on.
+One. I neglected to include stop gradient on the target function. it actually works fine w/ this missing...
+
+2!!! I did not include axis=1 in tf.reduce_sum(), which caused tensor flow to simply broadcast a single value (the best action in the entire
+batch) rather than determining the best action for each sample in the batch. This makes it utter nonsense.
+
+3. I neglected to include the (1-done_mask_ph), which shouldn't have too much effect.""" 
+
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
 class QLearner(object):
@@ -184,11 +192,23 @@ class QLearner(object):
     self.target_fn = q_func(obs_tp1_float,self.num_actions,scope="target_fn",reuse=False)
 
     # Now bellman error = huber_loss(Q(s,a)-y_i), where y_i is the r(s,a)+gamma*max_a'[Q(s',a')]
-    y_vect = tf.add(self.rew_t_ph,tf.reduce_max(tf.multiply(gamma,self.target_fn)))
+#    y_vect = tf.add(self.rew_t_ph,(1-self.done_mask_ph)*tf.multiply(gamma,tf.reduce_max(self.target_fn,axis = 1)))
+    # y_vect = tf.add(self.rew_t_ph,tf.multiply(gamma,tf.reduce_max(self.target_fn,axis = 1)))
+    """Wow, the error here was that you really need axis = 1 in your tf.reduce_max, or else it reduces it
+    along the axis dimension as well! Yikes!
 
+    The 1-done_mask basically just sets that term to zero if the episode was ending."""
+    y_vect = tf.add(self.rew_t_ph,(1-self.done_mask_ph)*tf.multiply(gamma,tf.reduce_max(self.target_fn,axis = 1)))
+#     y_vect = tf.Print(y_vect, [tf.reduce_max(self.target_fn, axis = 1),tf.shape(tf.reduce_max(self.target_fn, axis=1))],
+#                       "axis=1 ")
+#     y_vect = tf.Print(y_vect, [tf.reduce_max(self.target_fn),tf.shape(tf.reduce_max(self.target_fn))],
+#                       "no_axis ")
+#     # gotta take maximum valued action
+    # import pdb; pdb.set_trace()
     indexer = tf.stack([tf.range(0,tf.shape(self.act_t_ph)[0],1), self.act_t_ph], axis = 1) # Makes the [[0,a0],[1,a1],...] array
     self.current_q_fn = tf.gather_nd(self.q_fn,indexer)
-    self.total_error = tf.reduce_sum(huber_loss(tf.subtract(self.current_q_fn,y_vect)))
+#    self.total_error = tf.reduce_sum(huber_loss(tf.subtract(self.current_q_fn,y_vect)))
+    self.total_error = tf.reduce_mean(huber_loss(tf.subtract(self.current_q_fn,tf.stop_gradient(y_vect))))
 
     q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_fn')
     target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_fn')
@@ -266,8 +286,6 @@ class QLearner(object):
 
     #####
     self.t += 1 # The big counter on the entire training process. 
-    if self.t % 50 == 0:
-        print('timestep '+str(self.t))
     # YOUR CODE HERE
    #since we are always on the most recent timestep of the buffer, we just call this...
    #right, first gotta store the last frame, and then we go with it. 
@@ -287,6 +305,10 @@ class QLearner(object):
         # action = self.session.run(self.q_fn,feed_dict = {self.obs_t_ph:encoded_obs})
         action = self.session.run(self.q_fn,feed_dict =
                                   {self.obs_t_ph:[self.replay_buffer.encode_recent_observation()]})
+        """realize, each dimension output of action represents the predicted Q-value of that action_index at
+        the given input state. The 'policy' of Q-learning is to choose the action that maximizes the Q-val,
+        so we thus do max(action) thing"""
+        action = np.argmax(action)
     obs, reward, done, info = self.env.step(action)
     self.replay_buffer.store_effect(frame_idx,action,reward,done)
         # Note: I worry the idx I pass in will cause error if it's off by one ***
@@ -304,13 +326,13 @@ class QLearner(object):
         self.replay_buffer.can_sample(self.batch_size)):
         '''So learning_freq = 4'''
 
-        print('updating on timestep ' + str(self.t))
         obs_t_batch, act_batch, rew_batch, obs_tp1_batch, done_mask = self.replay_buffer.sample(self.batch_size)
       
         if self.model_initialized == False:
             initialize_interdependent_variables(self.session,tf.global_variables(), {
                 self.obs_t_ph : obs_t_batch,
                 self.obs_tp1_ph : obs_tp1_batch})
+            self.model_initialized = True
 
 #         total_error = self.session.run(self.total_error,feed_dict = {
 #             self.obs_t_ph : obs_t_batch,
